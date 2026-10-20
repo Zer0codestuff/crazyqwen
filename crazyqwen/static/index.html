@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CrazyQwen</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="stage" aria-label="Image">
+      <div class="progress" id="progress" hidden><div class="progress-fill" id="progress-fill"></div></div>
+      <figure class="canvas" id="canvas">
+        <img id="current" alt="" hidden>
+        <p class="empty" id="empty">Describe an image and press Generate.</p>
+      </figure>
+      <p class="status" id="status" aria-live="polite"></p>
+      <nav class="history" id="history" aria-label="Previous images"></nav>
+    </section>
+
+    <aside class="panel">
+      <form id="form" autocomplete="off">
+        <label class="field">
+          <span class="field-name">Prompt</span>
+          <textarea id="prompt" rows="5" placeholder="A rainy Tokyo alley at night, neon signs reflected in puddles" required></textarea>
+        </label>
+
+        <div class="field">
+          <span class="field-name">Mode</span>
+          <div class="segmented" role="radiogroup" aria-label="Mode">
+            <label><input type="radio" name="mode" value="fast" checked><span>Fast<small>6 steps</small></span></label>
+            <label><input type="radio" name="mode" value="quality"><span>Quality<small>40 steps</small></span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-name">Aspect ratio</span>
+          <div class="chips" id="aspects" role="radiogroup" aria-label="Aspect ratio"></div>
+        </div>
+
+        <div class="field">
+          <span class="field-name">Size <output id="dims"></output></span>
+          <div class="segmented" role="radiogroup" aria-label="Size">
+            <label><input type="radio" name="size" value="0.5"><span>Small</span></label>
+            <label><input type="radio" name="size" value="1" checked><span>Medium</span></label>
+            <label><input type="radio" name="size" value="2"><span>Large</span></label>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field-name">Seed</span>
+          <span class="seed">
+            <input id="seed" type="number" min="0" max="2147483647" placeholder="Random">
+            <button type="button" id="seed-clear" class="ghost" title="Use a random seed">Random</button>
+          </span>
+        </label>
+
+        <details class="advanced" id="advanced">
+          <summary>Quality settings</summary>
+          <label class="field">
+            <span class="field-name">Steps <output id="steps-out">40</output></span>
+            <input id="steps" type="range" min="10" max="60" step="1" value="40">
+          </label>
+          <label class="field">
+            <span class="field-name">Guidance <output id="guidance-out">1.0</output></span>
+            <input id="guidance" type="range" min="1" max="7" step="0.5" value="1">
+          </label>
+          <label class="field">
+            <span class="field-name">Negative prompt</span>
+            <textarea id="negative" rows="2" placeholder="Used when guidance is above 1. Doubles the time per step."></textarea>
+          </label>
+        </details>
+
+        <button type="submit" id="generate" class="primary">Generate</button>
+        <p class="hint">⌘ Enter to generate</p>
+      </form>
+
+      <section class="details" id="details" hidden aria-label="Image details">
+        <p class="details-prompt" id="d-prompt"></p>
+        <dl id="d-meta"></dl>
+        <div class="actions">
+          <button type="button" class="ghost" id="d-reuse">Reuse settings</button>
+          <a class="ghost button" id="d-download" download>Download</a>
+          <button type="button" class="ghost danger" id="d-delete">Delete</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>
