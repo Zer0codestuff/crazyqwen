@@ -27,6 +27,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .app {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--panel-width);
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
   height: 100dvh;
 }
@@ -37,12 +38,14 @@ button, input, textarea { font: inherit; color: inherit; }
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto auto;
   min-width: 0;
+  min-height: 0;
   padding: 20px 20px 12px;
   gap: 10px;
 }
 .canvas {
   margin: 0;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   min-height: 0;
   overflow: hidden;
@@ -218,7 +221,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 820px) {
-  .app { grid-template-columns: 1fr; height: auto; }
+  .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
   .stage { min-height: 70vh; height: 70vh; }
   .panel { border-left: none; border-top: 1px solid var(--line); overflow: visible; }
 }
