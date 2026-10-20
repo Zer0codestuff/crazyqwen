@@ -31,12 +31,16 @@ Local text-to-image app for Apple Silicon (target: the owner's MacBook, M4, 16 G
 
 ## Status
 
-- Verified: transformer load (16 s, 7.57 GB), LoRA attach 454/454 keys (+1.36 GB) and detach, UI renders.
-- Not yet verified: streaming text encoder, VAE decode, full generation timings.
+- Verified end to end on M4 16 GB (CLI and UI, Fast and Quality). 1024x1024: Fast ~43 s/step (~4 min 50 s total),
+  Quality ~23 s/step (~15 min for 40 steps). Peaks: encode 1.3-2.3 GB, denoise 9.9 GB, decode 6.4 GB.
+- Memory policy (`engine.py`): `LOW_MEMORY` (RAM < 32 GB) releases the transformer before the VAE decode;
+  `TILED_DECODE` (RAM < 64 GB) decodes in 512 px tiles. Untiled decode with the transformer resident peaked at 23 GB.
 
 ## Recent changes
 
 - 2026-10-20: initial implementation (engine, server, UI, CLI, run.sh, README guide).
+- 2026-10-20: low-memory decode (release transformer, tiled VAE), per-phase peak memory in job metadata,
+  UI stage no longer overflows the viewport, README speed and memory figures.
 
 ## Preferences and constraints
 
@@ -48,7 +52,8 @@ Local text-to-image app for Apple Silicon (target: the owner's MacBook, M4, 16 G
 
 ## Known issues / next steps
 
-- Run the first end-to-end generation and record timings in README.
+- The runtime turbo LoRA (r256, bf16, unbaked) roughly doubles step time (43 s vs 23 s at 1024). Worth profiling;
+  baking into 8-bit weights needs a quality check first.
 - Possible additions: image editing (model supports up to 10 reference images), 9-step turbo mode, live preview.
 
 ## Do not

@@ -4,8 +4,9 @@ Memory plan:
 - The bf16 text encoder (~16 GB) is never fully resident. Its weights are mapped lazily and
   each decoder layer is evaluated, then dropped, so encoding peaks at roughly 1.5 GB.
   Prompt embeddings are cached on disk, so a repeated prompt skips the encoder entirely.
-- The 8-bit transformer (~7.6 GB) is loaded once from the abenzerps file as-is (no
-  re-quantization) and stays resident between images until the idle timeout unloads it.
+- The 8-bit transformer (~7.6 GB) is loaded from the abenzerps file as-is (no re-quantization).
+  Below 32 GB of RAM it is released before the VAE decode (see LOW_MEMORY); otherwise it stays
+  resident between images until the idle timeout unloads it.
 - The turbo LoRA is attached at runtime only for Fast mode and detached for Quality mode.
 """
 
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import gc
 import hashlib
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -51,6 +53,14 @@ EMBED_CACHE = PROJECT_ROOT / ".cache" / "embeddings"
 
 FAST_STEPS = 6  # the turbo LoRA is distilled for exactly these sigma nodes
 QUALITY_STEPS = 40  # upstream default
+
+RAM_GB = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1e9
+# Measured on an M4 16 GB: transformer + LoRA hold 9.9 GB and an untiled 1024px VAE decode
+# peaks at 16.4 GB on top of that. Below 32 GB, free the transformer before decoding and
+# decode in 512px tiles (5.3 GB, differences invisible: mean 0.5/255). Reloading it costs
+# a few seconds per image.
+LOW_MEMORY = RAM_GB < 32
+TILED_DECODE = RAM_GB < 64
 
 
 class Cancelled(Exception):
@@ -291,7 +301,7 @@ class Engine:
 
     @property
     def loaded(self) -> bool:
-        return self.transformer is not None
+        return self.transformer is not None or self.vae is not None
 
     def _ensure_paths(self) -> models.ModelPaths:
         if self.paths is None:
@@ -311,11 +321,14 @@ class Engine:
             self.vae = load_vae(paths.base_root)
         self.last_used = time.time()
 
-    def unload(self) -> None:
+    def unload_transformer(self) -> None:
         self.transformer = None
-        self.vae = None
         self.turbo = None
         _free()
+
+    def unload(self) -> None:
+        self.vae = None
+        self.unload_transformer()
 
     def generate(
         self,
@@ -326,6 +339,7 @@ class Engine:
         req = request.normalized()
         report = progress or (lambda p: None)
         started = time.perf_counter()
+        peaks: dict[str, float] = {}
         mx.reset_peak_memory()
 
         # 1. Encode the prompt first, while the least memory is in use.
@@ -336,6 +350,8 @@ class Engine:
         embeds, mask = self.text_encoder.encode(req.prompt)
         neg = self.text_encoder.encode(req.negative_prompt) if req.negative_prompt else None
         encoded_at = time.perf_counter()
+        peaks["encode"] = _peak_gb()
+        mx.reset_peak_memory()
         if cancelled():
             raise Cancelled()
 
@@ -387,14 +403,20 @@ class Engine:
                 step_times.append(time.perf_counter() - t0)
                 report(Progress("denoising", t + 1, req.steps, {"step_seconds": round(step_times[-1], 2)}))
         denoised_at = time.perf_counter()
+        peaks["denoise"] = _peak_gb()
 
-        # 3. Decode. Tile large images so the VAE does not spike memory.
+        # 3. Decode. On small-memory Macs the transformer is released first.
         report(Progress("decoding"))
+        if LOW_MEMORY:
+            del transformer, turbo
+            self.unload_transformer()
+        mx.reset_peak_memory()
         latents = Qwen21LatentCreator.unpack_latents(latents, config.height, config.width)
-        tiling = TilingConfig() if config.width * config.height > 1280 * 1280 else None
+        tiling = TilingConfig() if TILED_DECODE else None
         decoded = VAEUtil.decode(vae=self.vae, latent=latents, tiling_config=tiling)
         image = ImageUtil.to_pil(decoded)
         del decoded, latents
+        peaks["decode"] = _peak_gb()
         _free()
         self.last_used = time.time()
 
@@ -418,6 +440,6 @@ class Engine:
                 "total": round(finished - started, 2),
                 "per_step": round(sum(step_times) / max(1, len(step_times)), 2),
             },
-            "peak_memory_gb": _peak_gb(),
+            "peak_memory_gb": peaks,
         }
         return image, meta

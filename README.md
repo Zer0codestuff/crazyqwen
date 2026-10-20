@@ -7,8 +7,20 @@ Local image generation on Apple Silicon with
 (MLX 8-bit), in a small web UI that opens in your browser. Everything runs on your Mac; prompts and images never
 leave it.
 
-> **Status:** early version. Model loading and the turbo LoRA are tested on an M4 with 16 GB. A full
-> end-to-end generation has not been verified yet. If something fails, please open an issue with the terminal output.
+> **Status:** tested end to end on a MacBook with an M4 and 16 GB, in both modes. If something fails, please open an
+> issue with the terminal output.
+
+## Speed
+
+Measured on an M4 with 16 GB at 1024 × 1024, with a browser and an editor open:
+
+| Mode | Per step | Whole image |
+| --- | --- | --- |
+| Fast (6 steps) | ~43 s | ~4 min 50 s |
+| Quality (40 steps) | ~23 s | ~15 min |
+
+Small images (512 × 512) are about 4× faster per step. A new prompt adds about 10 seconds for the text encoder; a
+repeated prompt is read from the cache. Closing other apps helps: with nothing else open a Fast step drops to about 31 s.
 
 ## Requirements
 
@@ -37,7 +49,7 @@ Later runs skip the download and open in a few seconds. Stop the app with `Ctrl+
 
 1. Write a prompt on the right. Detailed descriptions work best: subject, setting, lighting, style, camera.
 2. Pick a mode:
-   - **Fast**: 6 steps with Viggle's turbo LoRA. About 5× faster than Quality, close in quality. Start here.
+   - **Fast**: 6 steps with Viggle's turbo LoRA. About 3× faster than Quality, close in quality. Start here.
    - **Quality**: 40 steps with the uncensored model alone. Under *Quality settings* you can change the steps,
      and raise *Guidance* above 1 to use a negative prompt (this doubles the time per step).
 3. Choose an aspect ratio and a size. Small is about 0.5 megapixels, Medium 1, Large 2. Larger images take
@@ -79,7 +91,9 @@ uv run crazyqwen serve --port 8000    # start the UI on another port
 | Transformer (MLX 8-bit) | 7.6 GB | Loaded once from the abenzerps file, without re-quantizing. Unloaded after 10 idle minutes (`CRAZYQWEN_IDLE_UNLOAD=<seconds>` to change). |
 | Text encoder (Qwen3-VL 8B, bf16) | ~1.5 GB peak | The full-precision weights (~16 GB) are streamed from disk one layer at a time instead of being loaded whole. Repeated prompts come from the cache. |
 | Turbo LoRA | 1.4 GB | Attached only in Fast mode, removed in Quality mode. |
-| VAE | ~1.4 GB | Large images are decoded in tiles. |
+| VAE decode | ~6.4 GB peak | Decoded in 512 px tiles. On Macs with less than 32 GB the transformer is released before decoding and reloaded (about 3 seconds) for the next image. |
+
+Measured peak on an M4 with 16 GB, Fast mode at 1024 × 1024: 9.9 GB while denoising, 6.4 GB while decoding.
 
 The text encoder stays at full precision on purpose: mflux notes that quantizing it noticeably hurts how well the
 image follows the prompt.
